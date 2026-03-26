@@ -38,7 +38,7 @@ LAMS-PROJECT/
 └── templates/       # HTML layouts for Login, Dashboard, etc.
 
 Installation & Setup
-1.Clone the repository- https://github.com/shivansh1918/LAMS-PROJECT.git
+1.the repository- https://github.com/Apnaplatform/LAMS
 2.Navigate to project folder
 cd LAMS-PROJECT
 3.Install dependencies-pip install -r requirements.txt
