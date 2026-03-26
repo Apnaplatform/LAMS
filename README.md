@@ -54,4 +54,4 @@ Marking: Students mark attendance within the allowed geofence range
 
 🌟 Support
 If you like this project, please ⭐ star this repository on GitHub. It really helps and motivates further development!
-Author: Shivansh Vashishth
+Author: Satyam Mishra
