@@ -1,0 +1,478 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>Teacher Dashboard</h2>
+    <p><b>Teacher:</b> {{ user.name }}</p>
+    <p><b>Teacher ID:</b> {{ teacher.teacher_id }}</p>
+    <p>Start session captures your live location and opens attendance for matching semester/subject students.</p>
+</div>
+
+<div class="card" id="teacher-location-card">
+    <h3>Attendance Location (Admin)</h3>
+    <p>Location is fixed by admin and cannot be changed by teacher.</p>
+    <div class="row">
+        <div>
+            <label for="manual_latitude">Latitude</label>
+            <input
+                id="manual_latitude"
+                type="text"
+                inputmode="decimal"
+                placeholder="e.g. 28.613900"
+                value="{{ '%.6f'|format(default_attendance_location.latitude) if default_attendance_location else '' }}"
+                readonly
+                disabled
+            >
+        </div>
+        <div>
+            <label for="manual_longitude">Longitude</label>
+            <input
+                id="manual_longitude"
+                type="text"
+                inputmode="decimal"
+                placeholder="e.g. 77.209000"
+                value="{{ '%.6f'|format(default_attendance_location.longitude) if default_attendance_location else '' }}"
+                readonly
+                disabled
+            >
+        </div>
+    </div>
+    {% if not default_attendance_location %}
+        <p class="text-danger" style="margin-top: 8px;">Admin has not set the attendance location yet.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Start Attendance Session</h3>
+    <label for="teacher_start_semester_id">Semester</label>
+    <select id="teacher_start_semester_id" onchange="loadTeacherSubjectsBySemester()">
+        <option value="">Select semester</option>
+        {% for sem in semesters %}
+            <option value="{{ sem.id }}">{{ sem.name }}</option>
+        {% endfor %}
+    </select>
+
+    <label for="subject_id">Subject</label>
+    <select id="subject_id" data-subject-map='{{ start_subject_map|tojson|safe }}'>
+        <option value="">Select semester first</option>
+    </select>
+    <button type="button" onclick="startTeacherSession(this)" style="margin-top: 8px;">Start Session with Current Location</button>
+</div>
+
+<div class="card">
+    <h3>Active Sessions</h3>
+    <div
+        class="table-wrap"
+        id="teacher-active-sessions-wrap"
+        {% if not active_sessions %}style="display:none;"{% endif %}
+    >
+        <table>
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Semester</th>
+                    <th>Start Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="teacher-active-sessions-body">
+                {% for sess, subject, semester in active_sessions %}
+                    <tr data-teacher-session-id="{{ sess.id }}">
+                        <td>{{ subject.name }}</td>
+                        <td>{{ semester.name }}</td>
+                        <td>{{ sess.start_time|fmt_date }}</td>
+                        <td><button type="button" class="btn-secondary" onclick="stopTeacherSession({{ sess.id }})">Stop</button></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p id="teacher-active-sessions-empty" {% if active_sessions %}style="display:none;"{% endif %}>No active session.</p>
+</div>
+
+<div class="card" id="pending-requests-card">
+    <h3>Pending Attendance Requests</h3>
+    <div class="row" style="margin-top: 8px;">
+        <button type="button" class="btn-secondary" id="refresh-requests-btn">Refresh Requests</button>
+    </div>
+    <div
+        class="table-wrap"
+        id="pending-requests-wrap"
+        {% if not pending_requests %}style="display:none;"{% endif %}
+    >
+        <table>
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Roll No</th>
+                    <th>Subject</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="pending-requests-body">
+                {% for item in pending_requests %}
+                    <tr>
+                        <td>{{ item.student_name }}</td>
+                        <td>{{ item.roll_no }}</td>
+                        <td>{{ item.subject }}</td>
+                        <td>{{ item.requested_at|fmt_date if item.requested_at else "-" }}</td>
+                        <td>
+                            <form method="post" action="{{ url_for('accept_attendance_request', request_id=item.id) }}" data-ajax-action="1" data-ajax-remove-closest="tr">
+                                <button type="submit">Accept</button>
+                            </form>
+                            <form method="post" action="{{ url_for('reject_attendance_request', request_id=item.id) }}" data-ajax-action="1" data-ajax-remove-closest="tr" onsubmit="return confirm('Reject this attendance request?');">
+                                <button type="submit" class="btn-secondary">Reject</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5">No pending requests.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p id="pending-requests-empty" {% if pending_requests %}style="display:none;"{% endif %}>No pending requests.</p>
+</div>
+
+<div class="card">
+    <h3>Students (Semester-wise)</h3>
+    <form method="get" class="row" style="margin-bottom: 12px;">
+        <div>
+            <label for="student_semester_id">Semester</label>
+            <select id="student_semester_id" name="student_semester_id">
+                <option value="">All</option>
+                {% for sem in semesters %}
+                    <option value="{{ sem.id }}" {% if sem.id == student_filter_semester %}selected{% endif %}>{{ sem.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>&nbsp;</label>
+            <button type="submit">Show Students</button>
+        </div>
+    </form>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Roll No</th>
+                    <th>Email</th>
+                    <th>Semester</th>
+                    <th>Verified</th>
+                    <th>Attendance %</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in student_attendance_summary %}
+                    <tr>
+                        <td>{{ row.user.name }}</td>
+                        <td>{{ row.student.roll_no }}</td>
+                        <td>{{ row.user.email }}</td>
+                        <td>{{ row.semester.name }}</td>
+                        <td>{{ "Yes" if row.student.verified else "No" }}</td>
+                        <td>{{ row.percentage }}%</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5">No students found for selected semester.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Attendance on {{ attendance_date_display }}</h3>
+    <div class="row" style="gap: 1rem; flex-wrap: wrap; font-size: 0.95rem; margin-bottom: 8px;">
+        <span><strong>Date:</strong> {{ attendance_date_parts.day }}</span>
+        <span><strong>Month:</strong> {{ attendance_date_parts.month }}</span>
+        <span><strong>Year:</strong> {{ attendance_date_parts.year }}</span>
+    </div>
+    <form id="teacher-attendance-date-form" method="get" class="row" style="margin-bottom: 12px;">
+        <input type="hidden" name="student_semester_id" value="{{ student_filter_semester or '' }}">
+        <input type="hidden" name="show_status" value="1">
+        <div>
+            <label for="attendance_date_display">Select date</label>
+            <input id="attendance_date" name="attendance_date" type="hidden" value="{{ attendance_date_iso }}">
+            <input id="attendance_date_display" type="text" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" value="{{ attendance_date_display }}">
+            <button id="attendance_date_open" type="button" class="btn-secondary" style="margin-left: 8px;">Pick</button>
+            <input id="attendance_date_picker" type="date" value="{{ attendance_date_iso }}" style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;">
+        </div>
+        <div>
+            <label>&nbsp;</label>
+            <button type="submit">Show Status</button>
+        </div>
+    </form>
+    {% if show_status %}
+        <p>{{ attendance_present_count }} present · {{ attendance_absent_count }} absent out of {{ attendance_total_students }} students.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Roll No</th>
+                        <th>Semester</th>
+                        <th>Attendance %</th>
+                        <th>Status</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in student_attendance_calendar %}
+                        <tr class="{{ 'attendance-absent' if not row.daily_records else 'attendance-present' }}">
+                            <td>{{ row.user.name }}</td>
+                            <td>{{ row.student.roll_no }}</td>
+                            <td>{{ row.semester.name }}</td>
+                            <td>{{ row.percentage }}%</td>
+                            <td>
+                                {% if row.daily_records %}
+                                    <span class="badge badge-success">Present</span>
+                                {% else %}
+                                    <span class="badge badge-warning">Absent</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.daily_records %}
+                                    <ul class="tiny-list">
+                                        {% for detail in row.daily_records %}
+                                            <li>
+                                                <span>{{ detail.subject }}</span>
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span>No attendance recorded</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="5">No students available for the selected semester filter.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>Select a date and click <strong>Show Status</strong> to load detailed attendance.</p>
+    {% endif %}
+</div>
+
+<script>
+(() => {
+    const semesterSelect = document.getElementById("teacher_start_semester_id");
+    const subjectSelect = document.getElementById("subject_id");
+    if (!semesterSelect || !subjectSelect) return;
+    let subjectMap = {};
+    try {
+        subjectMap = JSON.parse(subjectSelect.dataset.subjectMap || "{}");
+    } catch (e) {
+        subjectMap = {};
+    }
+
+    const render = (subjects) => {
+        subjectSelect.innerHTML = "";
+        subjectSelect.disabled = false;
+        if (!subjects || subjects.length === 0) {
+            subjectSelect.appendChild(new Option("No subjects available for selected semester", ""));
+            return;
+        }
+        subjectSelect.appendChild(new Option("Select subject", ""));
+        subjects.forEach((s) => subjectSelect.appendChild(new Option(s.name, String(s.id))));
+    };
+
+    async function loadSubjects() {
+        const semesterId = semesterSelect.value;
+        if (!semesterId) {
+            subjectSelect.disabled = false;
+            subjectSelect.innerHTML = "";
+            subjectSelect.appendChild(new Option("Select semester first", ""));
+            return;
+        }
+
+        const fallbackSubjects = subjectMap[String(semesterId)] || [];
+        render(fallbackSubjects);
+
+        try {
+            const res = await fetch(`/api/teacher/subjects?semester_id=${encodeURIComponent(semesterId)}&_ts=${Date.now()}`, { cache: "no-store" });
+            const contentType = res.headers.get("content-type") || "";
+            if (!contentType.includes("application/json")) {
+                return;
+            }
+            const data = await res.json();
+            if (res.ok && data.success && Array.isArray(data.subjects)) {
+                render(data.subjects);
+            }
+        } catch (e) {
+            // Keep fallback subjects already rendered.
+        }
+    }
+
+    semesterSelect.addEventListener("change", loadSubjects);
+    window.loadTeacherSubjectsBySemester = loadSubjects;
+    loadSubjects();
+})();
+
+(() => {
+    const form = document.getElementById("teacher-attendance-date-form");
+    const hiddenIso = document.getElementById("attendance_date");
+    const display = document.getElementById("attendance_date_display");
+    const picker = document.getElementById("attendance_date_picker");
+    const openBtn = document.getElementById("attendance_date_open");
+    if (!form || !hiddenIso || !display || !picker || !openBtn) return;
+
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const isoToDisplay = (iso) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+        if (!m) return "";
+        return `${m[3]}/${m[2]}/${m[1]}`;
+    };
+    const displayToIso = (value) => {
+        const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((value || "").trim());
+        if (!m) return null;
+        const dd = Number(m[1]);
+        const mm = Number(m[2]);
+        const yyyy = Number(m[3]);
+        if (!yyyy || mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+        // Basic validity check using Date (avoids 31/02, etc.).
+        const candidate = new Date(Date.UTC(yyyy, mm - 1, dd));
+        if (
+            candidate.getUTCFullYear() !== yyyy ||
+            candidate.getUTCMonth() !== mm - 1 ||
+            candidate.getUTCDate() !== dd
+        ) {
+            return null;
+        }
+        return `${yyyy}-${pad2(mm)}-${pad2(dd)}`;
+    };
+
+    const syncFromPicker = () => {
+        hiddenIso.value = picker.value;
+        display.value = isoToDisplay(picker.value);
+    };
+
+    // Init display from server-provided ISO.
+    if (!display.value) {
+        display.value = isoToDisplay(hiddenIso.value);
+    }
+    if (!picker.value) {
+        picker.value = hiddenIso.value;
+    }
+
+    picker.addEventListener("change", () => {
+        syncFromPicker();
+    });
+
+    openBtn.addEventListener("click", () => {
+        // Prefer native picker UI where supported (Chromium).
+        if (typeof picker.showPicker === "function") {
+            picker.showPicker();
+        } else {
+            picker.click();
+        }
+    });
+
+    display.addEventListener("change", () => {
+        const iso = displayToIso(display.value);
+        if (!iso) {
+            // Revert to last known-good value.
+            display.value = isoToDisplay(hiddenIso.value);
+            return;
+        }
+        hiddenIso.value = iso;
+        picker.value = iso;
+    });
+})();
+
+(() => {
+    const refreshBtn = document.getElementById("refresh-requests-btn");
+    const body = document.getElementById("pending-requests-body");
+    const wrap = document.getElementById("pending-requests-wrap");
+    const empty = document.getElementById("pending-requests-empty");
+    if (!refreshBtn || !body || !wrap || !empty) return;
+
+    const escapeHtml = (value) =>
+        String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+const renderRows = (requests) => {
+        if (!Array.isArray(requests) || requests.length === 0) {
+            body.innerHTML = "<tr><td colspan='5'>No pending requests.</td></tr>";
+            wrap.style.display = "none";
+            empty.style.display = "";
+            return;
+        }
+        wrap.style.display = "";
+        empty.style.display = "none";
+        body.innerHTML = requests
+            .map((row) => {
+                const dateLabel = escapeHtml(row.requested_at || "-");
+return `
+                    <tr>
+                        <td>${escapeHtml(row.student_name)}</td>
+                        <td>${escapeHtml(row.roll_no)}</td>
+                        <td>${escapeHtml(row.subject)}</td>
+                        <td>${dateLabel}</td>
+<td>
+                            <form method="post" action="/teacher/attendance-request/${row.id}/accept" data-ajax-action="1" data-ajax-remove-closest="tr">
+                                <button type="submit">Accept</button>
+                            </form>
+                            <form method="post" action="/teacher/attendance-request/${row.id}/reject" data-ajax-action="1" data-ajax-remove-closest="tr" onsubmit="return confirm('Reject this attendance request?');">
+                                <button type="submit" class="btn-secondary">Reject</button>
+                            </form>
+                        </td>
+                    </tr>
+                `;
+            })
+            .join("");
+        initAjaxActionForms();
+    };
+
+    const loadRequests = async () => {
+        refreshBtn.disabled = true;
+        try {
+            const res = await fetch(`/api/teacher/attendance-requests?_ts=${Date.now()}`, {
+                cache: "no-store",
+                headers: { "Cache-Control": "no-store" },
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                alert(data.message || "Could not load attendance requests.");
+                return;
+            }
+            renderRows(data.requests || []);
+        } catch (err) {
+            alert("Could not refresh requests right now. Please try again.");
+        } finally {
+            refreshBtn.disabled = false;
+        }
+    };
+
+    refreshBtn.addEventListener("click", loadRequests);
+})();
+
+(() => {
+    const storageKey = "teacherDashboardScrollY";
+    const restoreScroll = () => {
+        const stored = sessionStorage.getItem(storageKey);
+        if (stored !== null) {
+            window.scrollTo(0, parseInt(stored, 10) || 0);
+            sessionStorage.removeItem(storageKey);
+        }
+    };
+
+    const captureScroll = () => {
+        sessionStorage.setItem(storageKey, Math.round(window.scrollY));
+    };
+
+    document.querySelectorAll("form").forEach((form) => {
+        form.addEventListener("submit", captureScroll, { passive: true });
+    });
+
+    window.addEventListener("load", restoreScroll);
+})();
+</script>
+{% endblock %}
+
+

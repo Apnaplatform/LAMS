@@ -1,0 +1,853 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" id="admin-overview">
+    <h2>Admin Dashboard</h2>
+    <p>Manage semesters, subjects, users and attendance reports.</p>
+</div>
+
+<div class="card admin-toolbar">
+    <button type="button" class="admin-nav-btn" data-target="account">Account</button>
+    <button type="button" class="admin-nav-btn" data-target="semester">Semester</button>
+    <button type="button" class="admin-nav-btn" data-target="subject">Subjects</button>
+    <button type="button" class="admin-nav-btn" data-target="users">Users</button>
+    <button type="button" class="admin-nav-btn" data-target="student-details">Student Details</button>
+    <button type="button" class="admin-nav-btn" data-target="teacher-sessions">Teacher Sessions</button>
+    <button type="button" class="admin-nav-btn" data-target="report">Report</button>
+</div>
+
+<div class="card admin-panel users-sub-toolbar" data-panel="users">
+    <button type="button" class="users-sub-btn" data-target="add-student">
+        <span class="sub-icon">AS</span>
+        <span>Add Student</span>
+    </button>
+    <button type="button" class="users-sub-btn" data-target="add-teacher">
+        <span class="sub-icon">AT</span>
+        <span>Add Teacher</span>
+    </button>
+    <button type="button" class="users-sub-btn" data-target="delete-data">
+        <span class="sub-icon">DD</span>
+        <span>Delete Data</span>
+    </button>
+    <button type="button" class="users-sub-btn" data-target="teachers">
+        <span class="sub-icon">T</span>
+        <span>Teachers</span>
+        <span class="sub-count">{{ teachers|length }}</span>
+    </button>
+    <button type="button" class="users-sub-btn" data-target="students">
+        <span class="sub-icon">S</span>
+        <span>Students</span>
+        <span class="sub-count">{{ students|length }}</span>
+    </button>
+</div>
+
+<div class="card admin-panel" data-panel="account">
+    <h3>Admin Account</h3>
+    <form method="post" action="{{ url_for('update_admin_account') }}" data-ajax-action="1" data-ajax-success-message="Admin account updated.">
+        <label for="admin_email">New Email</label>
+        <input id="admin_email" type="email" name="email" value="{{ admin_user.email if admin_user else '' }}" required>
+
+        <label for="admin_department">Department</label>
+        <input id="admin_department" type="text" name="department" value="{{ admin_user.department if admin_user and admin_user.department else '' }}" required>
+
+        <label for="admin_password">New Password (optional)</label>
+        <input id="admin_password" type="password" name="password" placeholder="Leave blank to keep old password">
+
+        <button type="submit">Update Email/Password</button>
+    </form>
+</div>
+
+<div class="card admin-panel" data-panel="semester">
+    <h3>Semester Management</h3>
+    <p><b>Student Registration:</b> {{ "Open" if registration_open else "Closed" }}</p>
+    <div class="row" style="margin-top: 8px;">
+        <form method="post" action="{{ url_for('toggle_student_registration') }}">
+            <button type="submit" class="btn-secondary">
+                {{ "Close Registration" if registration_open else "Open Registration" }}
+            </button>
+        </form>
+    </div>
+    <form
+        method="post"
+        action="{{ url_for('delete_semester_data') }}"
+        onsubmit="return confirm('Delete all data for the selected semester? This will remove students, attendance, sessions, subjects, and mappings.');"
+    >
+        <label for="delete_semester_id">Select Semester</label>
+        <select id="delete_semester_id" name="semester_id" required>
+            <option value="">Select semester</option>
+            {% for sem in semesters %}
+                <option value="{{ sem.id }}">{{ sem.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn-secondary">Delete Semester Data</button>
+    </form>
+</div>
+
+<div class="card admin-panel" data-panel="semester">
+    <h3>Add Semester</h3>
+    <p>Semester list is fixed.</p>
+    <button type="button" class="btn-secondary" disabled>Fixed Semester List</button>
+</div>
+
+<div class="card admin-panel" data-panel="semester">
+    <h3>Set Attendance Location</h3>
+    <p>Set default session center point (latitude/longitude).</p>
+    <form method="post" action="{{ url_for('admin_set_attendance_location') }}">
+        <label for="attendance_lat">Latitude</label>
+        <input
+            id="attendance_lat"
+            name="latitude"
+            inputmode="decimal"
+            placeholder="e.g. 28.613900"
+            value="{{ '%.6f'|format(default_attendance_location.latitude) if default_attendance_location else '' }}"
+            required
+        >
+        <label for="attendance_lng">Longitude</label>
+        <input
+            id="attendance_lng"
+            name="longitude"
+            inputmode="decimal"
+            placeholder="e.g. 77.209000"
+            value="{{ '%.6f'|format(default_attendance_location.longitude) if default_attendance_location else '' }}"
+            required
+        >
+        <button type="submit">Set Location</button>
+    </form>
+</div>
+
+<div class="card admin-panel" data-panel="subject">
+    <h3>Subject Management</h3>
+    <form method="post" action="{{ url_for('add_subject') }}" data-ajax-action="1" data-ajax-success-message="Subject added. Refresh to see it in the list.">
+        <label for="subject_name">Subject Name</label>
+        <input id="subject_name" name="name" required>
+
+        <label for="subject_sem">Semester</label>
+        <select id="subject_sem" name="semester_id" required>
+            <option value="">Select semester</option>
+            {% for sem in semesters %}
+                <option value="{{ sem.id }}">{{ sem.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label><input type="checkbox" name="status" checked style="width:auto;"> Enabled</label>
+        <button type="submit">Add Subject</button>
+    </form>
+
+    <h3 style="margin-top: 16px;">Teacher-Subject Mapping</h3>
+    <form method="post" action="{{ url_for('assign_teacher_subject') }}" class="row" data-ajax-action="1" data-ajax-success-message="Teacher-subject mapping saved. Refresh to see it in the list.">
+        <div>
+            <label for="map_teacher_id">Teacher ID</label>
+            <select id="map_teacher_id" name="teacher_id" required>
+                <option value="">Select teacher</option>
+                {% for teacher, user in teachers %}
+                    <option value="{{ teacher.id }}">{{ teacher.teacher_id }} - {{ user.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="map_subject_id">Subject</label>
+            <select id="map_subject_id" name="subject_id" required>
+                <option value="">Select subject</option>
+                {% for subject, semester in subjects %}
+                    <option value="{{ subject.id }}">{{ subject.name }} ({{ semester.name }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>&nbsp;</label>
+            <button type="submit">Assign Subject</button>
+        </div>
+    </form>
+</div>
+
+<div class="card admin-panel users-sub-panel" data-panel="users" data-user-panel="add-student">
+    <h3>Allow New Student Registration (Admin Add)</h3>
+    <form method="post" action="{{ url_for('admin_add_student') }}" data-ajax-action="1" data-ajax-success-message="Student added. Refresh to see it in the list.">
+        <div class="row">
+            <div>
+                <label for="stu_name">Name</label>
+                <input id="stu_name" name="name" required>
+            </div>
+            <div>
+                <label for="stu_email">Email</label>
+                <input id="stu_email" type="email" name="email" required>
+            </div>
+            <div>
+                <label for="stu_password">Password</label>
+                <input id="stu_password" type="password" name="password" required>
+            </div>
+            <div>
+                <label for="stu_roll">Roll Number</label>
+                <input id="stu_roll" name="roll_no" required>
+            </div>
+            <div>
+                <label for="stu_sem">Semester</label>
+                <select id="stu_sem" name="semester_id" required>
+                    <option value="">Select semester</option>
+                    {% for sem in semesters %}
+                        <option value="{{ sem.id }}">{{ sem.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label style="margin-top: 26px;"><input type="checkbox" name="verified" style="width:auto;"> Mark Verified</label>
+            </div>
+        </div>
+        <button type="submit">Add Student</button>
+    </form>
+</div>
+
+<div class="card admin-panel users-sub-panel" data-panel="users" data-user-panel="add-teacher">
+    <h3>Add Teacher Account</h3>
+    <form method="post" action="{{ url_for('admin_add_teacher') }}" data-ajax-action="1" data-ajax-success-message="Teacher added successfully.">
+        <div class="row">
+            <div>
+                <label for="teach_name">Name</label>
+                <input id="teach_name" name="name" required>
+            </div>
+            <div>
+                <label for="teach_teacher_id">Teacher ID</label>
+                <input id="teach_teacher_id" name="teacher_id" required>
+            </div>
+            <div>
+                <label for="teach_email">Email</label>
+                <input id="teach_email" type="email" name="email" placeholder="Gmail account" required>
+            </div>
+            <div>
+                <label for="teach_password">Password</label>
+                <input id="teach_password" type="password" name="password" required>
+            </div>
+            <div>
+                <label for="teach_department">Department</label>
+                <input id="teach_department" name="department" placeholder="Optional">
+            </div>
+        </div>
+        <p class="form-note">Teacher accounts are assigned the teacher role automatically and verified by default.</p>
+        <button type="submit">Add Teacher</button>
+    </form>
+</div>
+
+<div class="card admin-panel users-sub-panel" data-panel="users" data-user-panel="delete-data">
+    <h3>Delete Saved Data</h3>
+    <div class="row">
+        <form method="post" action="{{ url_for('admin_delete_student_by_roll') }}" data-ajax-action="1" data-ajax-success-message="Student deleted (if found)." onsubmit="return confirm('Delete student by roll number?');">
+            <label for="delete_roll">Delete Student By Roll No</label>
+            <input id="delete_roll" name="roll_no" placeholder="Enter exact roll number" required>
+            <button type="submit" class="btn-secondary">Delete Student</button>
+        </form>
+        <form method="post" action="{{ url_for('admin_delete_teacher_by_teacher_id') }}" data-ajax-action="1" data-ajax-success-message="Teacher deleted (if found)." onsubmit="return confirm('Delete teacher by teacher ID?');">
+            <label for="delete_teacher_id">Delete Teacher By ID</label>
+            <input id="delete_teacher_id" name="teacher_id" placeholder="Enter exact teacher ID" required>
+            <button type="submit" class="btn-secondary">Delete Teacher</button>
+        </form>
+    </div>
+</div>
+
+<div class="card admin-panel" data-panel="subject">
+    <h3>Subject Enable / Disable</h3>
+    <button id="toggle-subject-list" type="button" class="btn-secondary" style="margin-top: 8px;">
+        List of Subjects
+    </button>
+    <div id="subject-list-wrap" style="display: none; margin-top: 12px;">
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Semester</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                        <th>Delete</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for subject, semester in subjects %}
+                        <tr>
+                            <td>{{ subject.name }}</td>
+                            <td>{{ semester.name }}</td>
+                            <td>
+                                {% if subject.status %}
+                                    <span class="badge js-subject-status">Enabled</span>
+                                {% else %}
+                                    <span class="badge badge-danger js-subject-status">Disabled</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="post" action="{{ url_for('toggle_subject', subject_id=subject.id) }}" data-ajax-action="1" data-ajax-toggle="subject">
+                                    <button type="submit" class="btn-secondary js-toggle-subject-btn">
+                                        {{ "Disable" if subject.status else "Enable" }}
+                                    </button>
+                                </form>
+                            </td>
+                            <td>
+                                <form method="post" action="{{ url_for('delete_subject', subject_id=subject.id) }}" data-ajax-action="1" data-ajax-remove-closest="tr" onsubmit="return confirm('Delete this subject and related attendance data?');">
+                                    <button type="submit" class="btn-secondary">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <h3 style="margin-top: 16px;">Mapped Teacher Subjects</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Teacher ID</th>
+                    <th>Teacher Name</th>
+                    <th>Subject</th>
+                    <th>Semester</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mapping, teacher, user, subject, semester in teacher_subject_mappings %}
+                    <tr>
+                        <td>{{ teacher.teacher_id }}</td>
+                        <td>{{ user.name }}</td>
+                        <td>{{ subject.name }}</td>
+                        <td>{{ semester.name }}</td>
+                        <td>
+                            <form method="post" action="{{ url_for('delete_teacher_subject_mapping', mapping_id=mapping.id) }}" data-ajax-action="1" data-ajax-remove-closest="tr" onsubmit="return confirm('Remove this teacher-subject mapping?');">
+                                <button type="submit" class="btn-secondary">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5">No subject mapping found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card admin-panel users-sub-panel" data-panel="users" data-user-panel="teachers">
+    <h3>Teachers</h3>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Teacher ID</th><th>Name</th><th>Email</th><th>Department</th><th>Delete</th></tr></thead>
+            <tbody>
+                {% for teacher, user in teachers %}
+                    <tr>
+                        <td>{{ teacher.teacher_id }}</td>
+                        <td>{{ user.name }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ teacher.department }}</td>
+                        <td>
+                            <form method="post" action="{{ url_for('admin_delete_teacher', teacher_id=teacher.id) }}" data-ajax-action="1" data-ajax-remove-closest="tr" onsubmit="return confirm('Delete this teacher and related session/attendance data?');">
+                                <button type="submit" class="btn-secondary">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6">No teachers found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card admin-panel users-sub-panel" data-panel="users" data-user-panel="students">
+    <h3>Students</h3>
+    <form method="get" class="row" style="margin-bottom: 10px;">
+        <div>
+            <label for="student_semester_id">Semester</label>
+            <select id="student_semester_id" name="student_semester_id">
+                <option value="">All</option>
+                {% for sem in semesters %}
+                    <option value="{{ sem.id }}" {% if sem.id == student_semester_id %}selected{% endif %}>{{ sem.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>&nbsp;</label>
+            <button type="submit">Show Students</button>
+        </div>
+    </form>
+    {% if students_semester_wise %}
+        {% for sem, sem_students in students_semester_wise %}
+            <h4 style="margin: 14px 0 8px;">{{ sem.name }} ({{ sem_students|length }})</h4>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Name</th><th>Roll</th><th>Email</th><th>Semester</th><th>Verified</th><th>Action</th><th>View</th><th>Delete</th></tr></thead>
+                    <tbody>
+                        {% for student, user, semester in sem_students %}
+                            <tr>
+                                <td>{{ user.name }}</td>
+                                <td>{{ student.roll_no }}</td>
+                                <td>{{ user.email }}</td>
+                                <td>{{ semester.name }}</td>
+                                <td class="js-verified-cell">
+                                    {% if student.verified %}
+                                        <span class="badge badge-success">Verified</span>
+                                    {% else %}
+                                        <span class="badge badge-warning">Unverified</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if student.verified %}
+                                        <button type="button" class="btn-secondary" disabled>Verified</button>
+                                    {% else %}
+                                        <form method="post" action="{{ url_for('admin_verify_student', student_id=student.id) }}" data-ajax-action="1" data-ajax-toggle="student-verify">
+                                            <button type="submit">Verify</button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button type="button" class="btn-secondary js-view-student" data-roll="{{ student.roll_no }}">View</button>
+                                </td>
+                                <td>
+                                    <form method="post" action="{{ url_for('admin_delete_student', student_id=student.id) }}" data-ajax-action="1" data-ajax-remove-closest="tr" onsubmit="return confirm('Delete this student and attendance data?');">
+                                        <button type="submit" class="btn-secondary">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>No students found.</p>
+    {% endif %}
+</div>
+
+<div class="card admin-panel" data-panel="student-details" id="student-details">
+    <h3>Check Specific Student Details</h3>
+    <form id="student-details-form" method="get" class="row" style="margin-bottom: 12px;" action="{{ url_for('admin_dashboard') }}#student-details">
+        <div>
+            <label for="detail_roll">Roll Number</label>
+            <input id="detail_roll" name="detail_roll" value="{{ detail_roll }}" placeholder="Enter exact roll number">
+        </div>
+        <div>
+            <label>&nbsp;</label>
+            <button type="submit">Get Student Details</button>
+        </div>
+    </form>
+
+    <div id="student-details-result">
+        {% if detail_roll %}
+            {% if student_detail %}
+                <div class="card" style="margin-top: 10px;">
+                    <p><b>Student Name:</b> {{ student_detail_summary.name }}</p>
+                    <p><b>Roll Number:</b> {{ student_detail_summary.roll_no }}</p>
+                    <p><b>Semester:</b> {{ student_detail_summary.semester }}</p>
+                    <p><b>Total Sessions:</b> {{ student_detail_summary.total_sessions }} | <b>Attended Sessions:</b> {{ student_detail_summary.attended_sessions }}</p>
+                    <p><b>Attendance Percentage:</b> {{ student_detail_summary.percentage }}%</p>
+                    <p><b>Status:</b> {{ "Verified" if student_detail_summary.verified else "Unverified" }}</p>
+                    {% if not student_detail_summary.verified %}
+                        <form method="post" action="{{ url_for('admin_verify_student', student_id=student_detail_summary.student_id) }}" data-ajax-action="1" data-ajax-toggle="student-verify">
+                            <button type="submit">Verify Student</button>
+                        </form>
+                    {% else %}
+                        <button type="button" class="btn-secondary" disabled>Verified</button>
+                    {% endif %}
+                </div>
+            {% else %}
+                <p>No student found for roll number <b>{{ detail_roll }}</b>.</p>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<div class="card admin-panel" data-panel="report" id="percentage-report">
+    <h3>Attendance Percentage Report</h3>
+    <p style="margin-top: 6px;">
+        <span class="badge badge-danger" style="margin-right: 6px;">Below 75%</span>
+        <span class="badge">75% or above</span>
+    </p>
+    <div class="stats-grid">
+        <div class="stats-card">
+            <p>Semester-wise Student Totals</p>
+            <div style="display: grid; gap: 2px; margin-top: 4px;">
+                {% for sem, count in report_semester_wise_counts %}
+                    <small>{{ sem.name }}: {{ count }}</small>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="stats-card stats-card-clickable" data-stats-action="report-75plus">
+            <p>Students >= 75%</p>
+            <h4 data-report-stat="above75">{{ report_above_75 }}</h4>
+        </div>
+        <div class="stats-card stats-card-clickable" data-stats-action="report-current-filter">
+            <p>Current Filter</p>
+            <h4 data-report-stat="filter">{{ report_semester_name }}</h4>
+        </div>
+    </div>
+    <form id="percentage-filter-form" method="get" class="row" style="margin-bottom: 12px;" action="{{ url_for('admin_dashboard') }}#percentage-report">
+        <div>
+            <label for="report_semester_id">Semester</label>
+            <select id="report_semester_id" name="report_semester_id">
+                <option value="">All Semesters</option>
+                {% for sem in semesters %}
+                    <option value="{{ sem.id }}" {% if sem.id == report_semester_id %}selected{% endif %}>{{ sem.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>&nbsp;</label>
+            <button type="submit" id="load-report-btn">Get Students</button>
+        </div>
+    </form>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Roll No</th>
+                    <th>Semester</th>
+                    <th>Present</th>
+                    <th>Total Sessions</th>
+                    <th>Percentage</th>
+                    <th>Delete</th>
+                </tr>
+            </thead>
+            <tbody id="percentage-report-body">
+                {% for item in percentage_report %}
+                    <tr data-semester-id="{{ item.semester_id }}" data-percentage="{{ item.percentage }}"
+                        class="{{ 'attendance-low' if (item.percentage|float) < 75 else 'attendance-ok' }}">
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.roll_no }}</td>
+                        <td>{{ item.semester }}</td>
+                        <td>{{ item.present }}</td>
+                        <td>{{ item.total }}</td>
+                        <td>{{ item.percentage }}%</td>
+                        <td>
+                            <form method="post" action="{{ url_for('delete_percentage_report_data', student_id=item.student_id) }}" data-ajax-action="1" data-ajax-remove-closest="tr" onsubmit="return confirm('Delete all attendance records for this student report?');">
+                                <button type="submit" class="btn-secondary">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="7">No report data available.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card admin-panel" data-panel="teacher-sessions" id="teacher-sessions">
+    <h3>Teacher Session Summary</h3>
+    {% if teacher_sessions %}
+        <div class="row" style="gap: 16px; align-items: flex-start;">
+            <div style="min-width: 220px; max-width: 260px;">
+                <p><b>Teachers</b></p>
+                <div class="stack" style="display: grid; gap: 8px;">
+                    {% for item in teacher_sessions %}
+                        <button
+                            type="button"
+                            class="btn-secondary js-teacher-session-tab"
+                            data-teacher-id="{{ item.teacher.id }}"
+                        >
+                            {{ item.user.name }} ({{ item.teacher.teacher_id }})
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+            <div style="flex: 1;">
+                {% for item in teacher_sessions %}
+                    <div class="card js-teacher-session-panel" data-teacher-panel="{{ item.teacher.id }}" style="display:none;">
+                        <p>
+                            <b>Teacher:</b> {{ item.user.name }} ({{ item.teacher.teacher_id }})
+                            · <b>Total Sessions:</b>
+                            <span class="badge" data-teacher-session-count="{{ item.teacher.id }}">{{ item.sessions|length }}</span>
+                        </p>
+                        <form
+                            method="post"
+                            action="{{ url_for('admin_delete_teacher_sessions', teacher_id=item.teacher.id) }}"
+                            data-ajax-action="1"
+                            data-ajax-toggle="teacher-session-delete-all"
+                            data-teacher-id="{{ item.teacher.id }}"
+                            onsubmit="return confirm('Delete all sessions for this teacher?');"
+                        >
+                            <button type="submit" class="btn-secondary">Delete All Sessions</button>
+                        </form>
+                        <div class="table-wrap" style="margin-top: 10px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Session ID</th>
+                                        <th>Subject</th>
+                                        <th>Semester</th>
+                                        <th>Start Time</th>
+                                        <th>End Time</th>
+                                        <th>Delete</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-teacher-session-body="{{ item.teacher.id }}">
+                                    {% for row in item.sessions %}
+                                        <tr data-session-id="{{ row.session.id }}">
+                                            <td>{{ row.session.id }}</td>
+                                            <td>{{ row.subject.name }}</td>
+                                            <td>{{ row.semester.name }}</td>
+                                            <td>{{ row.session.start_time|fmt_datetime }}</td>
+                                            <td>{{ row.session.end_time|fmt_datetime if row.session.end_time else "-" }}</td>
+                                            <td>
+                                                <form
+                                                    method="post"
+                                                    action="{{ url_for('admin_delete_session', session_id=row.session.id) }}"
+                                                    data-ajax-action="1"
+                                                    data-ajax-toggle="teacher-session-delete"
+                                                    data-teacher-id="{{ item.teacher.id }}"
+                                                    onsubmit="return confirm('Delete this session?');"
+                                                >
+                                                    <button type="submit" class="btn-secondary">Delete</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    {% else %}
+                                        <tr class="js-no-sessions"><td colspan="6">No sessions found.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% else %}
+        <p>No teacher sessions found.</p>
+    {% endif %}
+</div>
+<script>
+    (function () {
+        const navButtons = document.querySelectorAll(".admin-nav-btn");
+        const panels = document.querySelectorAll(".admin-panel");
+        const usersSubButtons = document.querySelectorAll(".users-sub-btn");
+        const usersSubPanels = document.querySelectorAll(".users-sub-panel");
+        const detailsForm = document.getElementById("student-details-form");
+        const detailsInput = document.getElementById("detail_roll");
+        const detailsResult = document.getElementById("student-details-result");
+        const viewButtons = document.querySelectorAll(".js-view-student");
+        const percentageForm = document.getElementById("percentage-filter-form");
+        const semesterSelect = document.getElementById("report_semester_id");
+        const percentageReportBody = document.getElementById("percentage-report-body");
+        const percentageStatAbove = document.querySelector("[data-report-stat='above75']");
+        const percentageStatFilter = document.querySelector("[data-report-stat='filter']");
+        const loadReportButton = document.getElementById("load-report-btn");
+        const toggleSubjectListBtn = document.getElementById("toggle-subject-list");
+        const subjectListWrap = document.getElementById("subject-list-wrap");
+        const statsCards = document.querySelectorAll(".stats-card-clickable");
+        const teacherSessionTabs = document.querySelectorAll(".js-teacher-session-tab");
+        const teacherSessionPanels = document.querySelectorAll(".js-teacher-session-panel");
+        let currentUsersPanel = "students";
+
+        const getPercentageRows = () =>
+            document.querySelectorAll("#percentage-report tbody tr[data-semester-id]");
+
+        function applyPercentageHighlight() {
+            const rows = getPercentageRows();
+            rows.forEach((row) => {
+                const percentage = parseFloat(row.dataset.percentage || "0");
+                row.classList.toggle("attendance-low", percentage < 75);
+                row.classList.toggle("attendance-ok", percentage >= 75);
+            });
+        }
+        applyPercentageHighlight();
+
+        function renderReportRows(students) {
+            if (!percentageReportBody) return;
+            if (!students || !students.length) {
+                percentageReportBody.innerHTML = "<tr><td colspan='7'>No report data available.</td></tr>";
+                applyPercentageHighlight();
+                return;
+            }
+            percentageReportBody.innerHTML = students
+                .map((item) => {
+                    const statusClass = Number(item.percentage) < 75 ? "attendance-low" : "attendance-ok";
+                    return `
+                        <tr data-semester-id="${item.semester_id}" data-percentage="${item.percentage}" class="${statusClass}">
+                            <td>${item.name}</td>
+                            <td>${item.roll_no}</td>
+                            <td>${item.semester}</td>
+                            <td>${item.present}</td>
+                            <td>${item.total}</td>
+                            <td>${item.percentage}%</td>
+                            <td>
+                                <form method="post" action="/admin/percentage/${item.student_id}/delete" data-ajax-action="1" data-ajax-remove-closest="tr" onsubmit="return confirm('Delete all attendance records for this student report?');">
+                                    <button type="submit" class="btn-secondary">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    `;
+                })
+                .join("");
+            applyPercentageHighlight();
+            initAjaxActionForms();
+        }
+
+        async function loadPercentageReport(semesterId) {
+            if (!semesterId) return;
+            loadReportButton?.setAttribute("disabled", "true");
+            try {
+                const response = await fetch(`/api/admin/report/percentage?semester_id=${encodeURIComponent(semesterId)}`);
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    alert(data.message || "Could not load report data.");
+                    return;
+                }
+                if (percentageStatAbove) {
+                    percentageStatAbove.textContent = data.report_above_75 ?? "0";
+                }
+                if (percentageStatFilter) {
+                    percentageStatFilter.textContent = data.report_semester_name ?? "";
+                }
+                renderReportRows(data.students ?? []);
+            } catch (error) {
+                alert("Could not load percentage data right now. Please try again.");
+            } finally {
+                loadReportButton?.removeAttribute("disabled");
+            }
+        }
+
+        function showUsersPanel(panelName) {
+            currentUsersPanel = panelName || "students";
+            usersSubPanels.forEach((panel) => {
+                panel.style.display = panel.dataset.userPanel === currentUsersPanel ? "" : "none";
+            });
+            usersSubButtons.forEach((btn) => {
+                btn.classList.toggle("active", btn.dataset.target === currentUsersPanel);
+            });
+        }
+
+        function showPanel(panelName) {
+            panels.forEach((panel) => {
+                panel.style.display = panel.dataset.panel === panelName ? "" : "none";
+            });
+            navButtons.forEach((btn) => {
+                btn.classList.toggle("active", btn.dataset.target === panelName);
+            });
+            if (panelName === "users") {
+                showUsersPanel(currentUsersPanel);
+            }
+        }
+
+        usersSubButtons.forEach((btn) => {
+            btn.addEventListener("click", () => showUsersPanel(btn.dataset.target));
+        });
+        navButtons.forEach((btn) => {
+            btn.addEventListener("click", () => showPanel(btn.dataset.target));
+        });
+        showPanel("users");
+
+        if (toggleSubjectListBtn && subjectListWrap) {
+            toggleSubjectListBtn.addEventListener("click", () => {
+                const isHidden = window.getComputedStyle(subjectListWrap).display === "none";
+                subjectListWrap.style.display = isHidden ? "" : "none";
+                toggleSubjectListBtn.textContent = isHidden ? "Hide Subjects" : "List of Subjects";
+            });
+        }
+
+        async function loadStudentDetails(rollNo) {
+            const roll = (rollNo || "").trim().toUpperCase();
+            if (!roll) {
+                detailsResult.innerHTML = "<p>Please enter a roll number.</p>";
+                return;
+            }
+            try {
+                const res = await fetch(`/api/admin/student/details?roll_no=${encodeURIComponent(roll)}`);
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    detailsResult.innerHTML = `<p>${data.message || "Student not found."}</p>`;
+                    return;
+                }
+                const s = data.summary;
+                detailsResult.innerHTML = `
+                    <div class="card" style="margin-top: 10px;">
+                        <p><b>Student Name:</b> ${s.name}</p>
+                        <p><b>Roll Number:</b> ${s.roll_no}</p>
+                        <p><b>Semester:</b> ${s.semester}</p>
+                        <p><b>Total Sessions:</b> ${s.total_sessions} | <b>Attended Sessions:</b> ${s.attended_sessions}</p>
+                        <p><b>Attendance Percentage:</b> ${s.percentage}%</p>
+                        <p><b>Status:</b> ${s.verified ? "Verified" : "Unverified"}</p>
+                        ${
+                            s.verified
+                                ? `<button type="button" class="btn-secondary" disabled>Verified</button>`
+                                : `<form method="post" action="/admin/student/${s.student_id}/verify" data-ajax-action="1" data-ajax-toggle="student-verify">
+                                        <button type="submit">Verify Student</button>
+                                   </form>`
+                        }
+                    </div>
+                `;
+                initAjaxActionForms();
+            } catch (err) {
+                detailsResult.innerHTML = "<p>Could not load student details right now.</p>";
+            }
+        }
+
+        if (detailsForm) {
+            detailsForm.addEventListener("submit", function (e) {
+                e.preventDefault();
+                showPanel("student-details");
+                loadStudentDetails(detailsInput ? detailsInput.value : "");
+            });
+        }
+
+        viewButtons.forEach((btn) => {
+            btn.addEventListener("click", function () {
+                const roll = this.dataset.roll || "";
+                if (detailsInput) detailsInput.value = roll;
+                showPanel("student-details");
+                loadStudentDetails(roll);
+            });
+        });
+
+        if (percentageForm) {
+            percentageForm.addEventListener("submit", function (e) {
+                e.preventDefault();
+                const semesterId = semesterSelect ? semesterSelect.value : "";
+                if (!semesterId) {
+                    alert("Please select a semester before loading percentage data.");
+                    return;
+                }
+                loadPercentageReport(semesterId);
+            });
+        }
+        statsCards.forEach((card) => {
+            card.addEventListener("click", function () {
+                const action = this.dataset.statsAction;
+                if (action === "report-all") {
+                    showPanel("report");
+                    if (semesterSelect) semesterSelect.value = "";
+                    getPercentageRows().forEach((row) => {
+                        row.style.display = "";
+                    });
+                    return;
+                }
+                if (action === "report-75plus") {
+                    showPanel("report");
+                    getPercentageRows().forEach((row) => {
+                        row.style.display = "";
+                    });
+                    applyPercentageHighlight();
+                    return;
+                }
+                if (action === "report-current-filter") {
+                    showPanel("report");
+                    if (percentageForm) {
+                        percentageForm.dispatchEvent(new Event("submit", { cancelable: true }));
+                    }
+                }
+            });
+        });
+
+        if (teacherSessionTabs.length && teacherSessionPanels.length) {
+            const showTeacherPanel = (teacherId) => {
+                teacherSessionPanels.forEach((panel) => {
+                    panel.style.display = panel.dataset.teacherPanel === teacherId ? "" : "none";
+                });
+                teacherSessionTabs.forEach((btn) => {
+                    btn.classList.toggle("active", btn.dataset.teacherId === teacherId);
+                });
+            };
+            teacherSessionTabs.forEach((btn) => {
+                btn.addEventListener("click", () => showTeacherPanel(btn.dataset.teacherId));
+            });
+            const first = teacherSessionTabs[0];
+            if (first) showTeacherPanel(first.dataset.teacherId);
+        }
+    })();
+</script>
+{% endblock %}

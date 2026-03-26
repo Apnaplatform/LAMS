@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card home-hero modern-hero hero-surface">
+    <div class="home-hero-grid">
+        <div class="hero-copy hero-copy--centered">
+            <div class="hero-heading">
+                <p class="hero-tag">Smart Campus Platform</p>
+                <h1 class="hero-main-title">
+                    <span>Location Access</span>
+                    <span>Attendance System</span>
+                </h1>
+            </div>
+            <p class="hero-subtitle hero-subtitle--wide">Bareilly College · Precise attendance from every hall, lab, and campus zone.</p>
+            <p class="hero-desc">
+                LAAS empowers admins, teachers, and students with geo-fenced attendance, live session control, and transparent reporting.
+            </p>
+            <div class="hero-actions hero-actions--center">
+                <a href="{{ url_for('login') }}"><button class="hero-btn hero-btn-primary">Login</button></a>
+                <a href="{{ url_for('register_student') }}"><button class="hero-btn hero-btn-secondary">Student Register</button></a>
+            </div>
+            <div class="hero-pills">
+                <span>50-meter geofence</span>
+                <span>Live session control</span>
+                <span>Verified reports</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="card metrics-section">
+    <div class="section-heading">
+        <h2>Trusted attendance insight</h2>
+        <p>LAAS keeps every location, session, and verification detail visible to campus roles.</p>
+    </div>
+    <div class="metrics-grid">
+        <article class="metric-card">
+            <h3>50 m</h3>
+            <p>Strict geofence keeps attendance marking limited to classrooms.</p>
+        </article>
+        <article class="metric-card">
+            <h3>3 dashboards</h3>
+            <p>Admin, teacher, and student flows show only what matters to the role.</p>
+        </article>
+        <article class="metric-card">
+            <h3>Live sync</h3>
+            <p>Attendance is verified instantly with GPS accuracy and session locking.</p>
+        </article>
+        <article class="metric-card">
+            <h3>Audit ready</h3>
+            <p>Location stamps and evidence keep records transparent for review.</p>
+        </article>
+    </div>
+</section>
+
+<section class="card feature-section">
+    <h2 class="feature-title">LAAS capabilities</h2>
+    <div class="feature-grid modern-feature-grid home-feature-grid">
+        <div class="card feature-box">
+            <h3>Smart attendance</h3>
+            <p>Geo-fence validation with instant marking, approvals, and safeguards.</p>
+        </div>
+        <div class="card feature-box">
+            <h3>Teacher control</h3>
+            <p>Sessions start only with live GPS data so students mark attendance in time.</p>
+        </div>
+        <div class="card feature-box">
+            <h3>Admin oversight</h3>
+            <p>Add subjects, verify records, and clear outdated data with confidence.</p>
+        </div>
+        <div class="card feature-box">
+            <h3>Student clarity</h3>
+            <p>Students see only their subjects, semester, and active sessions.</p>
+        </div>
+        <div class="card feature-box">
+            <h3>Reports & analytics</h3>
+            <p>View percentages, subject summaries, and attendance history in one place.</p>
+        </div>
+        <div class="card feature-box">
+            <h3>Secure onboarding</h3>
+            <p>Guided registration with Gmail validation and role protection.</p>
+        </div>
+    </div>
+</section>
+
+
+<section class="card modern-cta home-cta">
+    <div>
+        <h3>Ready to streamline attendance?</h3>
+        <p>One platform for students, teachers, and admins with reliable geo-access control.</p>
+    </div>
+    <div class="cta-actions">
+        <a href="{{ url_for('login') }}"><button>Login</button></a>
+    </div>
+</section>
+{% endblock %}
